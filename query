@@ -19,30 +19,22 @@ JOIN
     AND b.unpost_seq = a.unpost_seq
 LEFT OUTER JOIN 
     (SELECT 
-         account, descr AS gl_acct_desc, effdt
+         t1.account, t1.descr AS gl_acct_desc, t1.effdt
          FROM 
-             (SELECT 
-                  account, descr AS gl_acct_desc, effdt, 
-                  ROW_NUMBER() OVER (PARTITION BY account ORDER BY effdt DESC) AS rnk
-              FROM 
-                  ps_gl_account_tbl) t
-         WHERE 
-             rnk = 1
+             ps_gl_account_tbl t1
+         LEFT JOIN ps_gl_account_tbl t2 ON t1.account = t2.account AND t1.effdt < t2.effdt
+         WHERE t2.effdt IS NULL
     ) gl ON gl.account = a.account
 LEFT OUTER JOIN 
     (SELECT 
-         deptid, descr AS did_desc, effdt
+         t1.deptid, t1.descr AS did_desc, t1.effdt
          FROM 
-             (SELECT 
-                  deptid, descr AS did_desc, effdt,
-                  ROW_NUMBER() OVER (PARTITION BY deptid ORDER BY effdt DESC) AS rnk
-              FROM 
-                  ps_dept_tbl) t
-         WHERE 
-             rnk = 1
+             ps_dept_tbl t1
+         LEFT JOIN ps_dept_tbl t2 ON t1.deptid = t2.deptid AND t1.effdt < t2.effdt
+         WHERE t2.effdt IS NULL
     ) di ON di.deptid = a.deptid
 WHERE 
-    a.journal_date >= STR_TO_DATE(@dt_str, '%Y-%m-%d')
+    a.journal_date >= '2022-01-01'
     AND b.jrnl_hdr_status IN ('U', 'P')
     AND a.account LIKE '8%'
     AND b.source NOT IN ('EX', 'AP')
