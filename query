@@ -1,23 +1,48 @@
-SELECT b.accounting_period, b.business_unit, b.currency_cd, NULL AS vendor_name, NULL AS vendor_id, b.fiscal_year,
+SELECT 
+    b.accounting_period, b.business_unit, b.currency_cd, NULL AS vendor_name, NULL AS vendor_id, b.fiscal_year,
     b.journal_date, a.journal_id, a.project_id,
     NULL AS expense_report_id, NULL AS expense_report_title, b.oprid, a.ledger, a.journal_line AS line_num, a.line_descr, b.source,
     NULL AS po_id, NULL AS invoice_id, NULL AS voucher_id, a.account, gl.gl_acct_desc, a.deptid, di.did_desc, NULL AS employee_name,
     a.monetary_amount,
     b.dttm_stamp_sec,
-    CASE WHEN b.journal_date BETWEEN DATE_FORMAT(DATE_FORMAT(CURRENT_DATE, '%Y-%m-01'), '%Y-%m-01') AND DATE_FORMAT(DATE_SUB(DATE_FORMAT(CURRENT_DATE, '%Y-%m-01'), INTERVAL 1 DAY), '%Y-%m-%d')
-        THEN 'Prev' ELSE 'Curr' END AS Vers
-FROM ps_jrnl_ln a
-JOIN ps_jrnl_header b ON b.business_unit = a.business_unit
+    CASE 
+        WHEN b.journal_date BETWEEN DATE_FORMAT(DATE_FORMAT(CURRENT_DATE, '%Y-%m-01'), '%Y-%m-%d') AND DATE_FORMAT(DATE_SUB(DATE_FORMAT(CURRENT_DATE, '%Y-%m-01'), INTERVAL 1 DAY), '%Y-%m-%d')
+            THEN 'Prev' 
+        ELSE 'Curr' 
+    END AS Vers
+FROM 
+    ps_jrnl_ln a
+JOIN 
+    ps_jrnl_header b ON b.business_unit = a.business_unit
     AND b.journal_date = a.journal_date
     AND b.journal_id = a.journal_id
     AND b.unpost_seq = a.unpost_seq
-LEFT OUTER JOIN (SELECT account, descr AS gl_acct_desc, effdt, ROW_NUMBER() OVER (PARTITION BY account ORDER BY effdt DESC) AS rnk
-        FROM ps_gl_account_tbl) gl ON gl.account = a.account
-    AND gl.rnk = 1
-LEFT OUTER JOIN (SELECT deptid, descr AS did_desc, effdt, ROW_NUMBER() OVER (PARTITION BY deptid ORDER BY effdt DESC) AS rnk
-        FROM ps_dept_tbl) di ON di.deptid = a.deptid
-    AND di.rnk = 1
-WHERE a.journal_date >= STR_TO_DATE(@dt_str, '%Y-%m-%d')
+LEFT OUTER JOIN 
+    (SELECT 
+         account, descr AS gl_acct_desc, effdt
+         FROM 
+             (SELECT 
+                  account, descr AS gl_acct_desc, effdt, 
+                  ROW_NUMBER() OVER (PARTITION BY account ORDER BY effdt DESC) AS rnk
+              FROM 
+                  ps_gl_account_tbl) t
+         WHERE 
+             rnk = 1
+    ) gl ON gl.account = a.account
+LEFT OUTER JOIN 
+    (SELECT 
+         deptid, descr AS did_desc, effdt
+         FROM 
+             (SELECT 
+                  deptid, descr AS did_desc, effdt,
+                  ROW_NUMBER() OVER (PARTITION BY deptid ORDER BY effdt DESC) AS rnk
+              FROM 
+                  ps_dept_tbl) t
+         WHERE 
+             rnk = 1
+    ) di ON di.deptid = a.deptid
+WHERE 
+    a.journal_date >= STR_TO_DATE(@dt_str, '%Y-%m-%d')
     AND b.jrnl_hdr_status IN ('U', 'P')
     AND a.account LIKE '8%'
     AND b.source NOT IN ('EX', 'AP')
