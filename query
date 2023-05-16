@@ -1,109 +1,72 @@
-SELECT 
-    b.accounting_period,
-    b.business_unit,
-    b.currency_cd,
-    NULL AS vendor_name,
-    NULL AS vendor_id,
-    b.fiscal_year,
-    b.journal_date,
-    a.journal_id,
-    a.project_id,
-    NULL AS expense_report_id,
-    NULL AS expense_report_title,
-    b.oprid,
-    a.ledger,
-    a.journal_line AS line_num,
-    a.line_descr,
-    b.source,
-    NULL AS po_id,
-    NULL AS invoice_id,
-    NULL AS voucher_id,
-    a.account,
-    gl.gl_acct_desc,
-    a.deptid,
-    di.did_desc,
-    NULL AS employee_name,
-    a.monetary_amount,
-    b.dttm_stamp_sec,
-    CASE 
-        WHEN b.journal_date BETWEEN trunc(trunc(current_date, 'MONTH') - 1, 'MONTH') AND trunc(current_date, 'MONTH') - 1
-        THEN 'Prev'
-        ELSE 'Curr'
-    END AS Vers
-FROM ps_jrnl_ln a
-JOIN ps_jrnl_header b ON b.business_unit = a.business_unit
-                      AND b.journal_date = a.journal_date
-                      AND b.journal_id = a.journal_id
-                      AND b.unpost_seq = a.unpost_seq
-LEFT OUTER JOIN (
-    SELECT 
-        account,
-        descr AS gl_acct_desc,
-        effdt,
-        ROW_NUMBER() OVER (PARTITION BY account ORDER BY effdt DESC) AS rnk
-    FROM ps_gl_account_tbl a
-) gl ON gl.account = a.account
-     AND gl.rnk = 1
-LEFT OUTER JOIN (
-    SELECT 
-        deptid,
-        descr AS did_desc,
-        effdt,
-        ROW_NUMBER() OVER (PARTITION BY deptid ORDER BY effdt DESC) AS rnk
-    FROM ps_dept_tbl a
-) di ON di.deptid = a.deptid
-      AND di.rnk = 1
-WHERE a.journal_date >= """ + dt_str + """
+SELECT b.accounting_period, b.business_unit, b.currency_cd, NULL AS vendor_name, NULL AS vendor_id, b.fiscal_year,
+       b.journal_date, a.journal_id, a.project_id, NULL AS expense_report_id, NULL AS expense_report_title, b.oprid,
+       a.ledger, a.journal_line AS line_num, a.line_descr, b.source, NULL AS po_id, NULL AS invoice_id, NULL AS voucher_id,
+       a.account, gl.gl_acct_desc, a.deptid, di.did_desc, NULL AS employee_name, a.monetary_amount, b.dttm_stamp_sec,
+       CASE WHEN b.journal_date BETWEEN DATE_FORMAT(LAST_DAY(CURDATE() - INTERVAL 2 MONTH) + INTERVAL 1 DAY, '%Y-%m-%d')
+                                     AND LAST_DAY(CURDATE() - INTERVAL 1 MONTH)
+            THEN 'Prev' ELSE 'Curr' END AS Vers
+FROM ps_jrnl_ln AS a
+JOIN ps_jrnl_header AS b ON b.business_unit = a.business_unit
+                         AND b.journal_date = a.journal_date
+                         AND b.journal_id = a.journal_id
+                         AND b.unpost_seq = a.unpost_seq
+LEFT OUTER JOIN (SELECT account, descr AS gl_acct_desc, effdt,
+                        ROW_NUMBER() OVER (PARTITION BY account ORDER BY effdt DESC) AS rnk
+                 FROM ps_gl_account_tbl) AS gl ON gl.account = a.account AND gl.rnk = 1
+LEFT OUTER JOIN (SELECT deptid, descr AS did_desc, effdt,
+                        ROW_NUMBER() OVER (PARTITION BY deptid ORDER BY effdt DESC) AS rnk
+                 FROM ps_dept_tbl) AS di ON di.deptid = a.deptid AND di.rnk = 1
+WHERE a.journal_date >= STR_TO_DATE(@dt_str, '%Y-%m-%d')
   AND b.jrnl_hdr_status IN ('U', 'P')
   AND a.account LIKE '8%'
   AND b.source NOT IN ('EX', 'AP')
   AND a.ledger IN ('CORP', 'LOCAL')
+  
 UNION ALL
-SELECT 
-    a.accounting_period,
-    a.business_unit_gl,
-    a.currency_cd,
-    NULL AS vendor_name,
-    NULL AS vendor_id,
-    a.fiscal_year,
-    a.journal_date,
-    a.journal_id,
-    a.project_id,
-    b.sheet_id AS expense_report_id,
-    c.sheet_name AS expense_report_title,
-    c.oprid_entered_by AS oprid,
-    NULL AS ledger,
-    a.line_nbr AS line_num,
-    b.descr254 AS line_desc,
-    'EX' AS source,
-    NULL AS po_id,
-    NULL AS invoice_id,
-    NULL AS voucher_id,
-    a.account,
-    gl.gl_acct_desc,
-    a.deptid,
-    di.did_desc,
-    e.name AS employee_name,
-    a.monetary_amount,
-    c.date_time_hm AS ddtm_stamp_sec,
-    CASE 
-        WHEN a.journal_date BETWEEN trunc(trunc(current_date, 'MONTH') - 1, 'MONTH') AND trunc(current_date, 'MONTH') - 1
-        THEN 'Prev'
-        ELSE 'Curr'
-    END AS Vers
-FROM ps_ex_acctg_line a
-JOIN ps_ex_sheet_line b ON a.line_nbr = b.line_nbr
-                        AND a.ex_doc_id = b.sheet_id
-LEFT OUTER JOIN (
-    SELECT 
-        account,
-        descr AS gl_acct
-    and di.rnk = 1
-    left outer
-    join ps_vendor c
-      on a.vendor_id=c.vendor_id
-    where a.journal_date >=  """+dt_str + """
-      and a.gl_distrib_status='D'
-      and a.account like '8%'
-      and b.voucher_id is not null
-      and a.ledger in ('CORP', 'LOCAL')"""
+
+SELECT a.accounting_period, a.business_unit_gl, a.currency_cd, NULL AS vendor_name, NULL AS vendor_id, a.fiscal_year,
+       a.journal_date, a.journal_id, a.project_id, b.sheet_id AS expense_report_id, c.sheet_name AS expense_report_title,
+       c.oprid_entered_by AS oprid, NULL AS ledger, a.line_nbr AS line_num, b.descr254 AS line_desc, 'EX' AS source,
+       NULL AS po_id, NULL AS invoice_id, NULL AS voucher_id, a.account, gl.gl_acct_desc, a.deptid, di.did_desc,
+       e.name AS employee_name, a.monetary_amount, c.date_time_hm AS ddtm_stamp_sec,
+       CASE WHEN a.journal_date BETWEEN DATE_FORMAT(LAST_DAY(CURDATE() - INTERVAL 2 MONTH) + INTERVAL 1 DAY, '%Y-%m-%d')
+                                     AND LAST_DAY(CURDATE() - INTERVAL 1 MONTH)
+            THEN 'Prev' ELSE 'Curr' END AS Vers
+FROM ps_ex_acctg_line AS a
+JOIN ps_ex_sheet_line AS b ON a.line_nbr = b.line_nbr AND a.ex_doc_id = b.sheet_id
+LEFT OUTER JOIN (SELECT account, descr AS gl_acct_desc, effdt,
+                        ROW_NUMBER() OVER (PARTITION BY account ORDER BY effdt DESC) AS rnk
+                 FROM ps_gl_account_tbl) AS gl
+       ON gl.account = a.account AND gl.rnk = 1
+LEFT OUTER JOIN (SELECT deptid, descr AS did_desc, effdt,
+                        ROW_NUMBER() OVER (PARTITION BY deptid ORDER BY effdt DESC) AS rnk
+                 FROM ps_dept_tbl) AS di ON di.deptid = a.deptid AND di.rnk = 1
+JOIN ps_ex_sheet_hdr AS c ON a.ex_doc_id = c.sheet_id
+JOIN ps_personal_data AS e ON c.emplid = e.emplid
+LEFT OUTER JOIN ps_c1_te_ex_shtatt AS f ON a.ex_doc_id = f.sheet_id AND a.line_nbr = f.line_nbr
+WHERE a.journal_date >= STR_TO_DATE(@dt_str, '%Y-%m-%d')
+  AND a.gl_distrib_status = 'D'
+  AND a.account LIKE '8%'
+  
+UNION ALL
+
+SELECT a.accounting_period, a.business_unit_gl, a.currency_cd, c.name1 AS vendor_name, c.vendor_id AS vendor_id, a.fiscal_year,
+       a.journal_date, a.journal_id, a.project_id, NULL AS expense_report_id, NULL AS expense_report_title, b.oprid,
+       a.ledger, a.cf_bal_line_num AS line_num, a.descr AS line_desc, 'AP' AS source, a.po_id, b.invoice_id, a.voucher_id,
+       a.account, gl.gl_acct_desc, a.deptid, di.did_desc, NULL AS employee_name, a.monetary_amount, a.create_dttm AS dttm_stamp_sec,
+       CASE WHEN a.journal_date BETWEEN DATE_FORMAT(LAST_DAY(CURDATE() - INTERVAL 2 MONTH) + INTERVAL 1 DAY, '%Y-%m-%d')
+                                     AND LAST_DAY(CURDATE() - INTERVAL 1 MONTH)
+            THEN 'Prev' ELSE 'Curr' END AS Vers
+FROM ps_vchr_acctg_line AS a
+LEFT OUTER JOIN ps_voucher AS b ON a.voucher_id = b.voucher_id AND a.business_unit = b.business_unit
+LEFT OUTER JOIN (SELECT account, descr AS gl_acct_desc, effdt,
+                        ROW_NUMBER() OVER (PARTITION BY account ORDER BY effdt DESC) AS rnk
+                 FROM ps_gl_account_tbl) AS gl ON gl.account = a.account AND gl.rnk = 1
+LEFT OUTER JOIN (SELECT deptid, descr AS did_desc, effdt,
+                        ROW_NUMBER() OVER (PARTITION BY deptid ORDER BY effdt DESC) AS rnk
+                 FROM ps_dept_tbl) AS di ON di.deptid = a.deptid AND di.rnk = 1
+LEFT OUTER JOIN ps_vendor AS c ON b.vendor_id = c.vendor_id
+WHERE a.journal_date >= STR_TO_DATE(@dt_str, '%Y-%m-%d')
+  AND a.account LIKE '8%'
+  AND a.gl_distrib_status = 'D'
+  AND a.ledger != 'RPTG';
