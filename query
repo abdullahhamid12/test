@@ -1,63 +1,78 @@
 SELECT
-    A.ACCOUNTING_PERIOD,
-    A.BUSINESS_UNIT_GL,
-    A.CURRENCY_CD,
-    NULL AS VENDOR_NAME,
-    NULL AS VENDOR_ID,
-    A.FISCAL_YEAR,
-    A.JOURNAL_DATE,
-    A.JOURNAL_ID,
-    A.PROJECT_ID,
-    B.SHEET_ID AS EXPENSE_REPORT_ID,
-    C.SHEET_NAME AS EXPENSE_REPORT_TITLE,
-    C.OPRID_ENTERED_BY AS OPRID,
-    NULL AS LEDGER,
-    A.LINE_NBR AS LINE_NUM,
-    B.DESCR254 AS LINE_DESC,
-    'EX' AS SOURCE,
-    NULL AS PO_ID,
-    NULL AS INVOICE_ID,
-    NULL AS VOUCHER_ID,
-    A.ACCOUNT,
-    GL.GL_ACCT_DESC,
-    A.DEPTID,
-    DI.DID_DESC,
-    E.NAME AS EMPLOYEE_NAME,
-    A.MONETARY_AMOUNT,
-    C.DATE_TIME_HM AS DDTM_STAMP_SEC,
+    a.accounting_period,
+    a.business_unit_gl,
+    a.currency_cd,
+    NULL AS vendor_name,
+    NULL AS vendor_id,
+    a.fiscal_year,
+    a.journal_date,
+    a.journal_id,
+    a.project_id,
+    b.sheet_id AS expense_report_id,
+    c.sheet_name AS expense_report_title,
+    c.oprid_entered_by AS oprid,
+    NULL AS ledger,
+    a.line_nbr AS line_num,
+    b.descr254 AS line_desc,
+    'EX' AS source,
+    NULL AS po_id,
+    NULL AS invoice_id,
+    NULL AS voucher_id,
+    a.account,
+    gl.gl_acct_desc,
+    a.deptid,
+    di.did_desc,
+    e.name AS employee_name,
+    a.monetary_amount,
+    c.date_time_hm AS ddtm_stamp_sec,
     CASE
-        WHEN A.JOURNAL_DATE BETWEEN DATE_FORMAT(DATE_FORMAT(CURRENT_DATE, '%Y-%M-01'), '%Y-%M-%D') AND DATE_FORMAT(DATE_SUB(DATE_FORMAT(CURRENT_DATE, '%Y-%M-01'), INTERVAL 1 DAY), '%Y-%M-%D')
-            THEN 'PREV'
-        ELSE 'CURR'
-    END AS VERS
+        WHEN a.journal_date BETWEEN DATE_FORMAT(DATE_FORMAT(CURRENT_DATE, '%Y-%M-01'), '%Y-%M-%D') AND DATE_FORMAT(DATE_SUB(DATE_FORMAT(CURRENT_DATE, '%Y-%M-01'), INTERVAL 1 DAY), '%Y-%M-%D')
+            THEN 'Prev'
+        ELSE 'Curr'
+    END AS Vers
 FROM
-    PS_EX_ACCTG_LINE A
-    JOIN PS_EX_SHEET_LINE B ON A.LINE_NBR = B.LINE_NBR AND A.EX_DOC_ID = B.SHEET_ID
-    JOIN PS_EX_SHEET_HDR C ON A.EX_DOC_ID = C.SHEET_ID
-    JOIN PS_PERSONAL_DATA E ON C.EMPLID = E.EMPLID
+    ps_ex_acctg_line a
+    INNER JOIN ps_ex_sheet_line b ON a.line_nbr = b.line_nbr AND a.ex_doc_id = b.sheet_id
     LEFT JOIN (
         SELECT
-            T1.ACCOUNT,
-            T1.DESCR AS GL_ACCT_DESC,
-            T1.EFFDT
+            account,
+            descr AS gl_acct_desc,
+            effdt
         FROM
-            PS_GL_ACCOUNT_TBL T1
-            LEFT JOIN PS_GL_ACCOUNT_TBL T2 ON T1.ACCOUNT = T2.ACCOUNT AND T1.EFFDT < T2.EFFDT
+            ps_gl_account_tbl a
         WHERE
-            T2.EFFDT IS NULL
-    ) GL ON GL.ACCOUNT = A.ACCOUNT
+            (account, effdt) IN (
+                SELECT
+                    account,
+                    MAX(effdt)
+                FROM
+                    ps_gl_account_tbl
+                GROUP BY
+                    account
+            )
+    ) gl ON gl.account = a.account
     LEFT JOIN (
         SELECT
-            T1.DEPTID,
-            T1.DESCR AS DID_DESC,
-            T1.EFFDT
+            deptid,
+            descr AS did_desc,
+            effdt
         FROM
-            PS_DEPT_TBL T1
-            LEFT JOIN PS_DEPT_TBL T2 ON T1.DEPTID = T2.DEPTID AND T1.EFFDT < T2.EFFDT
+            ps_dept_tbl a
         WHERE
-            T2.EFFDT IS NULL
-    ) DI ON DI.DEPTID = A.DEPTID
+            (deptid, effdt) IN (
+                SELECT
+                    deptid,
+                    MAX(effdt)
+                FROM
+                    ps_dept_tbl
+                GROUP BY
+                    deptid
+            )
+    ) di ON di.deptid = a.deptid
+    INNER JOIN ps_ex_sheet_hdr c ON a.ex_doc_id = c.sheet_id
+    INNER JOIN ps_personal_data e ON c.emplid = e.emplid
+    LEFT JOIN ps_c1_te_ex_shtatt f ON a.ex_doc_id = f.sheet_id AND a.line_nbr = f.line_nbr
 WHERE
-    A.JOURNAL_DATE >= '2022-01-01'
-    AND A.GL_DISTRIB_STATUS = 'D'
-    AND A.ACCOUNT LIKE '8%'
+    a.journal_date >= """ + dt_str + """
+    AND a.gl_distrib_status = 'D'
+    AND a.account LIKE '8%'
