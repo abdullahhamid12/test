@@ -1,38 +1,73 @@
 SELECT
-    a.accounting_period, a.business_unit_gl, a.currency_cd, NULL AS vendor_name, NULL AS vendor_id, a.fiscal_year, a.journal_date,
-    a.journal_id, a.project_id, b.sheet_id AS expense_report_id, c.sheet_name AS expense_report_title,
-    c.oprid_entered_by AS oprid, NULL AS ledger, a.line_nbr AS line_num, b.descr254 AS line_desc, 'EX' AS source,
-    NULL AS po_id, NULL AS invoice_id, NULL AS voucher_id, a.account, gl.gl_acct_desc, a.deptid, di.did_desc,
-    e.name AS employee_name, a.monetary_amount, c.date_time_hm AS ddtm_stamp_sec,
-    CASE WHEN a.journal_date BETWEEN TRUNC(TRUNC(CURRENT_DATE, 'MONTH') - 1, 'MONTH') AND TRUNC(CURRENT_DATE, 'MONTH') - 1
-         THEN 'Prev'
-         ELSE 'Curr'
+    a.accounting_period,
+    a.business_unit_gl,
+    a.currency_cd,
+    NULL AS vendor_name,
+    NULL AS vendor_id,
+    a.fiscal_year,
+    a.journal_date,
+    a.journal_id,
+    a.project_id,
+    b.sheet_id AS expense_report_id,
+    c.sheet_name AS expense_report_title,
+    c.oprid_entered_by AS oprid,
+    NULL AS ledger,
+    a.line_nbr AS line_num,
+    b.descr254 AS line_desc,
+    'EX' AS source,
+    NULL AS po_id,
+    NULL AS invoice_id,
+    NULL AS voucher_id,
+    a.account,
+    gl.gl_acct_desc,
+    a.deptid,
+    di.did_desc,
+    e.name AS employee_name,
+    a.monetary_amount,
+    c.date_time_hm AS ddtm_stamp_sec,
+    CASE
+        WHEN a.journal_date BETWEEN DATE_FORMAT(LAST_DAY(CURRENT_DATE - INTERVAL 2 MONTH) + INTERVAL 1 DAY, '%Y-%m-%d')
+                               AND LAST_DAY(CURRENT_DATE - INTERVAL 1 MONTH)
+        THEN 'Prev'
+        ELSE 'Curr'
     END AS Vers
 FROM
     ps_ex_acctg_line a
     JOIN ps_ex_sheet_line b ON a.line_nbr = b.line_nbr AND a.ex_doc_id = b.sheet_id
     LEFT JOIN (
         SELECT
-            account, MAX(effdt) AS max_effdt
+            account,
+            descr AS gl_acct_desc,
+            effdt
         FROM
-            ps_gl_account_tbl
-        GROUP BY
-            account
-    ) gl_latest ON gl_latest.account = a.account
-    LEFT JOIN ps_gl_account_tbl gl ON gl.account = gl_latest.account AND gl.effdt = gl_latest.max_effdt
+            ps_gl_account_tbl t1
+        WHERE
+            t1.effdt = (
+                SELECT MAX(t2.effdt)
+                FROM ps_gl_account_tbl t2
+                WHERE t2.account = t1.account
+                  AND t2.effdt <= CURRENT_DATE
+            )
+    ) gl ON gl.account = a.account
     LEFT JOIN (
         SELECT
-            deptid, MAX(effdt) AS max_effdt
+            deptid,
+            descr AS did_desc,
+            effdt
         FROM
-            ps_dept_tbl
-        GROUP BY
-            deptid
-    ) di_latest ON di_latest.deptid = a.deptid
-    LEFT JOIN ps_dept_tbl di ON di.deptid = di_latest.deptid AND di.effdt = di_latest.max_effdt
+            ps_dept_tbl t1
+        WHERE
+            t1.effdt = (
+                SELECT MAX(t2.effdt)
+                FROM ps_dept_tbl t2
+                WHERE t2.deptid = t1.deptid
+                  AND t2.effdt <= CURRENT_DATE
+            )
+    ) di ON di.deptid = a.deptid
     JOIN ps_ex_sheet_hdr c ON a.ex_doc_id = c.sheet_id
     JOIN ps_personal_data e ON c.emplid = e.emplid
     LEFT JOIN ps_c1_te_ex_shtatt f ON a.ex_doc_id = f.sheet_id AND a.line_nbr = f.line_nbr
 WHERE
-    a.journal_date >= """ + dt_str + """
+    a.journal_date >= DATE({dt_str})
     AND a.gl_distrib_status = 'D'
-    AND a.account LIKE '8%'
+    AND a.account LIKE '8%';
